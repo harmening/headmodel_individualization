@@ -1,4 +1,5 @@
 """Module allowing for ray-casting operations and measurements
+Source code taken from: https://bitbucket.org/somada141/pycaster
 
 This module contains the `rayCaster` class which allows for ray-casting
 operations to be performed on any mesh represented by a 'vtkPolyData'

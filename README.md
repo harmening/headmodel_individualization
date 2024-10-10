@@ -1,5 +1,5 @@
 # Headmodel Individualization
-**Individualize BEM head models based on scalp proxies like exactly measured electrode positions or photogrammetry scans of the subject's head surface**<br>
+**Data-driven head model individualization from exact electrode positions or photogrammetry of the subject's head surface improves M/EEG source localization accuracy!**<br>
 <!--- 
 Supplementary code to the scientific publication ["Head model individuzalization"]().**<br>
 --->
