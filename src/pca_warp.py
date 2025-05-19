@@ -180,7 +180,7 @@ def pca2tri(coeff, pcas, mean_head, std_dev, wise='head'):
 
 
 def error(x_p, pcas, mean_head, std_dev, all_tris, mean_pnt, elecpos, 
-          regularize=False):
+          regularize=True):
     pos = pca2tri(x_p, pcas, mean_head, std_dev, wise='head')
     scalp_tris = all_tris['scalp']
     fit_bnd = (pos['scalp'], scalp_tris)
