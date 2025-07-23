@@ -10,7 +10,7 @@ In our related scientific publication ["Data-driven head model individualization
 ## Practitioner's Guide
 This tutorial demonstrates how to perform a 3D-scan of a single subject's head and how to construct individualized surface meshes using the PCAwarp algorithm.<br>
 
-Also check out [my related video tutorial on photogrammetry for fNIRS](https://youtu.be/upBmo2ZlWBM?t=1732) (starting at min 28:50)<br>
+Also check out [my related video tutorial on photogrammetry](https://youtu.be/PMBUWHnLXUo?si=qxrb89QRhaXAVt0j) (fNIRS-cap, but same procedure)<br>
 and the similar [tutorial on how to digitize electrodes by FieldTrip](https://www.fieldtriptoolbox.org/tutorial/electrode/).<br>
 <br>
 <img align="right" width="300" src="img/scaniverse_overview.jpeg">
@@ -39,7 +39,7 @@ This tutorial uses an iPhone 12 mini and the app [Scaniverse](https://scaniverse
 - Select 'Detail' as Processing Mode and 'Save' after the processing is finished.
 - At the bottom right, click on 'Share' -> 'Export Model' -> 'OBJ' -> 'Mail' to your computer.
 
-For details, also check [my scaniverse video tutorial (fNIRS-cap, but same procedure)](https://youtu.be/upBmo2ZlWBM?t=2020) (starting at min 33:40).<br>
+For details, also check [my scaniverse video tutorial (fNIRS-cap, but same procedure)](https://www.youtube.com/watch?v=PMBUWHnLXUo&t=410s) (starting at min 33:40).<br>
 <br>
 
 ### 3. During scanning
@@ -76,7 +76,7 @@ clicking on the fiducials and writing the coordinates down:
   ```
 <br>
 
-
+## Headmodel individualization
 ### 6. Call the PCAwarp algorithm
 ```
 # Clone the repository and install the requirements
@@ -118,6 +118,7 @@ reconstruction, regularizer type (if meshes are intersecting).
 * .mat for [Matlab](https://de.mathworks.com/products/matlab.html) / [FieldTrip](https://www.fieldtriptoolbox.org/).
 * .surf for [MNE-python](https://mne.tools/stable/index.html).
 * .npy as simple dictionary containing the 4 output meshes.
+* .nii segmentation masks for [cedalion](https://doc.ibs.tu-berlin.de/cedalion/doc/dev/).
 
 **Need more support/interfaces? Please contact me or open an issue on GitHub.**<br>
 

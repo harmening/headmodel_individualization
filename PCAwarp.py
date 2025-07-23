@@ -5,11 +5,9 @@ import numpy as np, scipy.io as sio
 from src.tri_io import write_tri, load_tri
 from src.transform_to_ctf import transform_to_ctf, apply_transform
 from src.pca_warp import shortest_dist, elec_warp
+from src.tri2nii import tri2nii
+from src.nii_postprocessing import postprocessing
 
-# optionally import the following packages
-#import trimesh                      # only for surface meshes as scalp proxies
-#import mne                          # only for loading .bvct files
-#import nibabel as nib               # only for export to .surf (python-mne)
 
 
 # How many PCs to use for reconstruction?
@@ -19,7 +17,7 @@ NUM_PCAS = 'ALL' #16
 BASEDIR = os.path.dirname(os.path.realpath(__file__))
 PCAS = pth(BASEDIR, 'data', 'pcas', NUM_PCAS+'pcas.npy')
 MEAN_HEAD = pth(BASEDIR, 'data', 'pcas', 'mean_head.npy')
-STD_DEV = pth(BASEDIR, 'data', 'pcas', 'std_dev.npy') 
+STD_DEV = pth(BASEDIR, 'data', 'pcas', 'std_dev.npy')
 SHELLS = ['scalp', 'skull', 'csf', 'cortex']
 
 
@@ -30,7 +28,7 @@ def pca_surfacemesh_warping(fiducials, optodes):
     std_dev = np.load(STD_DEV, allow_pickle=True)
     pcas = np.load(PCAS, allow_pickle=True)
 
-    # Determine mean_pnt for surface-line-intersection 
+    # Determine mean_pnt for surface-line-intersection
     mean_pnt = np.mean(mean_bnd['cortex'][0], axis=0)
     min_idx, min_dist = shortest_dist(mean_pnt, mean_bnd['scalp'][0])
     new_z = np.max(mean_bnd['scalp'][0][:,2]) - min_dist
@@ -47,9 +45,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-scalp', help='Path to scalp proxy file. Can be a \
                         .npy- or a .txt-file or a surface mesh of typical \
-                        mesh formats like .stl, .obj, .ply', type=str, 
+                        mesh formats like .stl, .obj, .ply', type=str,
                         required=True)
-    parser.add_argument('-nas', help='Nasion (NAS) fiducial coordinates.', 
+    parser.add_argument('-nas', help='Nasion (NAS) fiducial coordinates.',
                         type=float, nargs=3, default=None)
     parser.add_argument('-lpa', help='Left preauricular (LPA) fiducial \
                         coordinates.', type=float, nargs=3, default=None)
@@ -135,7 +133,7 @@ if __name__ == '__main__':
             print('Could not load scalp file. Please check the file format.')
             raise
 
-    ### Check if fiducials are provided    
+    ### Check if fiducials are provided   np.eye(4),#
     if nas is None or lpa is None or rpa is None:
         print('Please provide fiducial coordinates (nas, lpa, rpa).')
         raise
@@ -147,44 +145,43 @@ if __name__ == '__main__':
                                                 mean_scalp=mean_scalp,
                                                 return_transform=True)
 
-
     ### Cut mesh input points above the ears
     CUT = 30#mm above the LPA, RPA, NAS plane
-    #scalp_proxies = scalp_proxies[scalp_proxies[:, 2] > CUT]
+    scalp_proxies = scalp_proxies[scalp_proxies[:, 2] > CUT]
 
 
-    ### Too many points? -> Decimate 
+    ### Too many points? -> Decimate
     if len(scalp_proxies) > 100:
         idx = np.random.randint(len(scalp_proxies), size=100)
         scalp_proxies = scalp_proxies[idx,:]
-   
+
 
     ### PCA warping
     print('Do the PCA warping. This might take a while...')
     fiducials = np.array([nas, lpa, rpa])
     bnd_w = pca_surfacemesh_warping(fiducials, scalp_proxies)
 
-    
+
 
     ### Transform back
     for shell in SHELLS:
-        bnd_w[shell] = (apply_transform(np.linalg.pinv(transform), 
+        bnd_w[shell] = (apply_transform(np.linalg.pinv(transform),
                                         bnd_w[shell][0]),
                         bnd_w[shell][1])
-  
-    
+
+
 
 
     ### Save results in different formats
     print('Finished. Export results in different formats.')
     photogrammetry_pth = os.path.dirname(scalp)
 
-   # OpenMEEG file format (.tri)
+    ## OpenMEEG file format (.tri)
     for shell in SHELLS:
         write_tri(bnd_w[shell][0], bnd_w[shell][1], pth(photogrammetry_pth,
                                                         'pca_warped_%s.tri'
                                                         % shell))
-    # .stl
+    ## .stl
     for shell in SHELLS:
         try:
             import trimesh
@@ -195,7 +192,7 @@ if __name__ == '__main__':
             mesh.export(pth(photogrammetry_pth, 'pca_warped_%s.stl' % shell),
                         file_type='stl_ascii')
 
-    # Python-MNE (.surf)
+    ## Python-MNE (.surf)
     for shell in SHELLS:
         try:
             import nibabel as nib
@@ -209,10 +206,34 @@ if __name__ == '__main__':
             nib.freesurfer.io.write_geometry(pth(photogrammetry_pth, mne_names[shell]),
                                              bnd_w[shell][0]/1000, bnd_w[shell][1])
 
-    # fieldtrip (MatLab struct .mat)
+    ## fieldtrip (MatLab struct .mat)
     sio.savemat(pth(photogrammetry_pth, 'pca_warped_bnd.mat'), {'bnd': bnd_w})
 
-    # .npy
+    ## .npy
     np.save(pth(photogrammetry_pth, 'pca_warped_bnd.npy'), bnd_w)
-     
+    np.save(pth(photogrammetry_pth, 'pca_warped_bnd_transform.npy'), transform)
 
+
+    ## Cedalion (.nii), segmentation masks
+    # Transform again into ctf and then into RAS (this is necessary for tri2nii)
+    print('Start cedalion export.')
+    ras2ctf = np.load('src/transform_acpc2ctf_icbm.npy', allow_pickle=True)
+    ctf2ras = np.linalg.pinv(ras2ctf)
+    for shell in SHELLS:
+        bnd_w[shell] = (apply_transform(transform, bnd_w[shell][0]),
+                        bnd_w[shell][1])
+        bnd_w[shell] = (apply_transform(ctf2ras, bnd_w[shell][0]/1000)*1000,
+                        bnd_w[shell][1])
+    bnds = [(bnd_w[shell][0], bnd_w[shell][1]) for shell in SHELLS] # mm
+    output_dir = pth(photogrammetry_pth, 'cedalion')
+    os.makedirs(output_dir, exist_ok=True)
+    back_transform = np.linalg.pinv(transform) @ ras2ctf # first back to ctf,
+                                                         # then in phtgrammetry
+                                                         # coordinate system
+    # back_transform = np.eye(4) #for RAS
+    tri2nii(bnds, output_dir=output_dir, transform=back_transform, 
+            t1_fn='src/template.nii', meshes='all')
+    print('Masks created. Do some postprocessing:')
+
+    postprocessing(output_dir, num_tissues=4)
+    print('Finished.')
