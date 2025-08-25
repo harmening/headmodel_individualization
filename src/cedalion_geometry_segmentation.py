@@ -93,7 +93,7 @@ def segmentation_postprocessing(
     
         for brain_tiss in ["gray", "whitegray", "cortex"]:
             if brain_tiss in tissues:
-                print("Smoothing %s ..." % brain_tiss)
+                #print("Smoothing %s ..." % brain_tiss)
                 sigma = 0.2
                 truncate = ((filter_size - 1) / 2 - 0.5) / sigma
                 for i in range(img[brain_tiss].shape[2]):
@@ -102,7 +102,7 @@ def segmentation_postprocessing(
                                                          truncate=truncate)
 
         if "white" in tissues:
-            print("Smoothing WM ...")
+            #print("Smoothing WM ...")
             sigma = 0.1
             truncate = ((filter_size - 1) / 2 - 0.5) / sigma
             for i in range(img["white"].shape[2]):
@@ -111,7 +111,7 @@ def segmentation_postprocessing(
 
         for csf_tiss in ["csf", "brain"]:
             if csf_tiss in tissues:
-                print("Smoothing %s ..." % csf_tiss)
+                #print("Smoothing %s ..." % csf_tiss)
                 sigma = 0.1
                 truncate = ((filter_size - 1) / 2 - 0.5) / sigma
                 for i in range(img[csf_tiss].shape[2]):
@@ -119,7 +119,7 @@ def segmentation_postprocessing(
                                                        sigma=sigma,
                                                        truncate=truncate)
 
-        print("Smoothing bone ...")
+        #print("Smoothing bone ...")
         sigma = 0.4
         truncate = ((filter_size - 1) / 2 - 0.5) / sigma
         for i in range(img["bone"].shape[2]):
@@ -127,7 +127,7 @@ def segmentation_postprocessing(
                                            truncate=truncate)
 
 
-        print("Smoothing skin ...")
+        #print("Smoothing skin ...")
         sigma = 1
         truncate = ((filter_size - 1) / 2 - 0.5) / sigma
         for i in range(img["skin"].shape[2]):
@@ -135,7 +135,7 @@ def segmentation_postprocessing(
                                            truncate=truncate)
 
         if "air" in tissues:
-            print("Smoothing air ...")
+            #print("Smoothing air ...")
             sigma = 1
             truncate = ((filter_size - 1) / 2 - 0.5) / sigma
             for i in range(img["air"].shape[2]):
@@ -143,7 +143,7 @@ def segmentation_postprocessing(
                                               truncate=truncate)
 
    
-    print('Creating binary masks...')
+    #print('Creating binary masks...')
     mask = binaryMaskGenerator(np.stack([img[tissue] for tissue in tissues]))
     img["empt"] = mask[0].astype(bool)
     for i, tissue in enumerate(tissues):
@@ -151,7 +151,7 @@ def segmentation_postprocessing(
 
     # Fix CSF continuity
     if fixCSF: 
-        print('Fixing CSF continuity...')
+        #print('Fixing CSF continuity...')
         assert "csf" in tissues, "CSF mask is not available"
         se = np.ones((3, 3, 3))
         dcsf = scipy.ndimage.binary_dilation(img["csf"],
@@ -184,19 +184,19 @@ def segmentation_postprocessing(
     if removeDisconnected:
         for brain_tissue in ["gray", "whitegray", "cortex"]:
             if brain_tissue in tissues:
-                print('Removing disconnected voxels for %s...' % brain_tissue)
+                #print('Removing disconnected voxels for %s...' % brain_tissue)
                 thres = 30
                 img[brain_tissue] = remove_small_objects(img[brain_tissue],
                                                          min_size=thres)
 
         if "white" in tissues:
-            print('Removing disconnected voxels for WM...')
+            #print('Removing disconnected voxels for WM...')
             thres = 40
             img["white"] = remove_small_objects(img["white"], min_size=thres)
 
         for csf_tissue in ["csf", "brain"]:
             if csf_tissue in tissues:
-                print('Removing disconnected voxels for %s...' % csf_tissue)
+                #print('Removing disconnected voxels for %s...' % csf_tissue)
                 siz, _ = sizeOfObject(img[csf_tissue])
                 try:
                     thres = siz[3]+1
@@ -205,11 +205,11 @@ def segmentation_postprocessing(
                 img[csf_tissue] = remove_small_objects(img[csf_tissue],
                                                        min_size=thres)
 
-        print('Removing disconnected voxels for Bone...')
+        #print('Removing disconnected voxels for Bone...')
         thres = 300
         img["bone"] = remove_small_objects(img["bone"], min_size=thres)
 
-        print('Removing disconnected voxels for Skin...')
+        #print('Removing disconnected voxels for Skin...')
         siz, _ = sizeOfObject(img["skin"])
         try:
             thres = siz[1]+1
@@ -218,13 +218,13 @@ def segmentation_postprocessing(
         img["skin"] = remove_small_objects(img["skin"], min_size=thres)
 
         if "air" in tissues:
-            print('Removing disconnected voxels for Air...')
+            #print('Removing disconnected voxels for Air...')
             thres = 20
             img["air"] = remove_small_objects(img["air"], min_size=thres)
 
     # Label unassigned voxels to the nearest tissue type
     if labelUnassigned:
-        print('Generating and labeling empty voxels...')
+        #print('Generating and labeling empty voxels...')
         mask = binaryMaskGenerator(np.stack([img[tiss] for tiss in tissues]))
         img["empt"] = mask[0].astype(bool)
 
@@ -264,7 +264,7 @@ def segmentation_postprocessing(
     
     # remoe air cavities
     if removeAir:
-        print('Removing outside air...')
+        #print('Removing outside air...')
         assert "air" in tissues, "Air mask is not available"
     else:
         img["air"] = np.ones(img["empt"].shape, dtype=bool)
@@ -286,7 +286,7 @@ def segmentation_postprocessing(
 
     # Subtract tissues from each others 
     if subtractTissues:
-        print('Subtracting tissues from each others...')
+        #print('Subtracting tissues from each others...')
         # from in to outside
         if "gray" in tissues and "white" in tissues:
             img["gray"] = img["gray"] & (~img["white"])

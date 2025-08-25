@@ -186,7 +186,7 @@ def tri2nii(bnds, output_dir=None, transform=np.eye(4), t1_fn='template.nii', me
                 output_file = output_dir + '/mask_'+str(tissue_label)+'.nii.gz'
             else:
                 output_file = '_mask_'+str(tissue_label)+'.nii.gz'
-            print('Output File:', output_file)
+            #print('Output File:', output_file)
             nib.save(new_img, output_file)
     else:
         tissue_color = {1: 0.45, # ~0.4–0.6 (depends on fat content)
