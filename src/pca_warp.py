@@ -33,8 +33,8 @@ def elec_warp(elecpos, pcas, mean_head, std_dev, onebyone=False):
         x0 = np.ones(num_pcas)
         res = minimize(error, x0, args=(pcas, mean_head, std_dev, all_tris, \
                                         mean_pnt, elecpos),
-                                  options={'disp':True,'eps':0.5}) # mm
-        print(res)
+                                  options={'disp':False,'eps':0.5}) # mm
+        #print(res)
         x_p = res.x
    
     else:
@@ -45,7 +45,7 @@ def elec_warp(elecpos, pcas, mean_head, std_dev, onebyone=False):
             res = minimize(error1by1, x0, args=(i, x_p, pcas, mean_head, \
                                                 std_dev, all_tris, mean_pnt, \
                                                 elecpos),
-                                        options={'disp':True,'eps':0.1})
+                                        options={'disp':False,'eps':0.1})
             print("%d. PCA coefficient: %f" % (i+1, res.x[0]))
             x_p[i] = res.x[0]
     
@@ -115,7 +115,7 @@ def shortest_dist(vert_pos, list_of_pos):
     return min_idx, min_dist
 
 
-def shape_distance(elecpos, bnd, mean_pnt):
+def shape_distance(elecpos, bnd, mean_pnt, return_all=False):
     pos, tris = bnd
     fit = caster(pos, tris)
     proj = elecpos + 1000*(elecpos-mean_pnt)
@@ -126,15 +126,18 @@ def shape_distance(elecpos, bnd, mean_pnt):
         if len(intersections) == 1:
             min_idx = 0
         elif len(intersections) > 1:
-            print('More than one intersection!')
+            #print('More than one intersection!')
             min_idx, _ = shortest_dist(elec, intersections)
         else:
-            print('Zero intersections!')
+            #print('Zero intersections!')
             intersections = pos
             min_idx, _ = shortest_dist(elec, intersections)
         intsct.append(intersections[min_idx])
-    dist = np.linalg.norm(elecpos - np.array(intsct))
+    dist = np.linalg.norm(elecpos - np.array(intsct), axis=1)
+    if return_all:
+        return dist
     diff = np.mean(dist)
+    #diff = np.median(dist)
     return diff
 
 
@@ -180,7 +183,8 @@ def pca2tri(coeff, pcas, mean_head, std_dev, wise='head'):
 
 
 def error(x_p, pcas, mean_head, std_dev, all_tris, mean_pnt, elecpos, 
-          regularize=True):
+          #regularize=True):
+          regularize=False):
     pos = pca2tri(x_p, pcas, mean_head, std_dev, wise='head')
     scalp_tris = all_tris['scalp']
     fit_bnd = (pos['scalp'], scalp_tris)

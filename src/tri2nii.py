@@ -27,7 +27,7 @@ def is_inside(points, polydata):
             points: Points to decide on whether is lies within the mesh or not
             polydata: vtk polydata instance of the triangular surface mesh
 
-        Returns: 
+        Returns:
             boolean: is the point within the mesh
     """
     vtkPoints = vtk.vtkPoints()
@@ -55,7 +55,7 @@ def calc_normal(p1, p2, p3):
     Parameters
     ----------
     n : np.array, shape 1x3
-        Normal vector 
+        Normal vector
     """
     return np.cross(p2-p1, p3-p1)
 
@@ -76,27 +76,26 @@ def bnd2stl_fn(bnd, stl_fn):
     return
 
 
-def tri2nii(bnds, output_dir=None, transform=np.eye(4), t1_fn='template.nii',
-            meshes='all'):
-    
+def tri2nii(bnds, output_dir=None, transform=np.eye(4), t1_fn='template.nii', meshes='all'):
+
     # Load T1 image
     t1 = nib.load(t1_fn)
     assert all([t1.affine[i,i] == 1.0 for i in range(4)])
 
     # load meshes
-   	
+
     # Prepare segmentation mask
     data = np.zeros(t1.shape)
-	
+
     # Apply padding
-    pad_width = ((0, 0),  # x-axis padding 
-                (0, 0),  # y-axis padding 
+    pad_width = ((0, 0),  # x-axis padding
+                (0, 0),  # y-axis padding
                 (0, 10))  # z-axis padding (on the positive side)
 
     data = np.pad(data, pad_width=pad_width, mode='constant', constant_values=0)
 
     # Transform points being inside surface meshes into index space for each tissue type
-    # Go from out to inside - this makes sure that every voxel has only one label. 
+    # Go from out to inside - this makes sure that every voxel has only one label.
     # {1: 'scalp', 2: 'skull', 3: 'csf', 4: 'cortex'}
     for tissue_label in range(1, len(bnds)+1):
         tissue_coords = bnds[tissue_label-1][0]
@@ -123,7 +122,7 @@ def tri2nii(bnds, output_dir=None, transform=np.eye(4), t1_fn='template.nii',
         y_max = min(int(np.max(tissue_coords[:,1])), ny)
         z_min = int(np.min(tissue_coords[:,2]))
         z_max = min(int(np.max(tissue_coords[:,2])), nz)
-        
+
         #print('min/max X coordinate: ', x_min,x_max)
         #print('min/max Y coordinate: ', y_min,y_max)
         #print('min/max Z coordinate: ', z_min,z_max)
@@ -151,7 +150,7 @@ def tri2nii(bnds, output_dir=None, transform=np.eye(4), t1_fn='template.nii',
         readerSTL.Update()
 
         polydata = readerSTL.GetOutput()
-        
+
         # Check if pre sorted points are inside the mesh
         inside = is_inside(points, polydata)
 
@@ -168,7 +167,7 @@ def tri2nii(bnds, output_dir=None, transform=np.eye(4), t1_fn='template.nii',
                             data[i][j][k] = tissue_label
                         count += 1
 
-    
+
     ## Save the segmentation mask (as one int-mask or as one binary mask per tissue label)
     affine = transform @ t1.affine
 
@@ -190,21 +189,23 @@ def tri2nii(bnds, output_dir=None, transform=np.eye(4), t1_fn='template.nii',
             print('Output File:', output_file)
             nib.save(new_img, output_file)
     else:
+        tissue_color = {1: 0.45, # ~0.4–0.6 (depends on fat content)
+                        2: 0.05, # ~0.0–0.1 (very dark, almost no signal)
+                        3: 0.1, #CSF ~0.0–0.1 (dark; long T1 → low signal)
+                        4: 0.55} #cortex (0.5–0.7 (brighter than cortex)
         new_data = np.zeros(data.shape)
-        new_data[data == tissue_label] = 1
-
+        for tissue_label in range(1, len(bnds)+1):
+            new_data[data == tissue_label] = tissue_color[tissue_label]
         #new_img = nilearn.image.new_img_like(t1,new_data,affine=affine)
         new_img = nib.nifti1.Nifti1Image(new_data, affine, t1.header)
         new_img.header['dim'][1] += sum(pad_width[0])
         new_img.header['dim'][2] += sum(pad_width[1])
         new_img.header['dim'][3] += sum(pad_width[2])
         if output_dir != None:
-            output_file = output_dir + '/mask.nii.gz'
+            output_file = output_dir + '/T1.mgz'
         else:
             output_file = 'bnd_w_mask.nii.gz'
-        #print('Output File:', output_file)
         nib.save(new_img, output_file)
 
-        
 
 

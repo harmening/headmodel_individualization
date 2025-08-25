@@ -11,11 +11,11 @@ from src.nii_postprocessing import postprocessing
 
 
 # How many PCs to use for reconstruction?
-NUM_PCAS = 'ALL' #16
+NUM_PCAS = 50 # out of 316
 
 # Don't change the following paths
 BASEDIR = os.path.dirname(os.path.realpath(__file__))
-PCAS = pth(BASEDIR, 'data', 'pcas', NUM_PCAS+'pcas.npy')
+PCAS = pth(BASEDIR, 'data', 'pcas', 'ALLpcas.npy')
 MEAN_HEAD = pth(BASEDIR, 'data', 'pcas', 'mean_head.npy')
 STD_DEV = pth(BASEDIR, 'data', 'pcas', 'std_dev.npy')
 SHELLS = ['scalp', 'skull', 'csf', 'cortex']
@@ -27,6 +27,9 @@ def pca_surfacemesh_warping(fiducials, optodes):
     mean_bnd = np.load(MEAN_HEAD, allow_pickle=True).item()
     std_dev = np.load(STD_DEV, allow_pickle=True)
     pcas = np.load(PCAS, allow_pickle=True)
+    if len(pcas) < NUM_PCAS:
+        raise ValueError('Asked for too much PCs. Check the NUM_PCAS argument.')
+    pcas = pcas[:NUM_PCAS]
 
     # Determine mean_pnt for surface-line-intersection
     mean_pnt = np.mean(mean_bnd['cortex'][0], axis=0)
@@ -192,26 +195,13 @@ if __name__ == '__main__':
             mesh.export(pth(photogrammetry_pth, 'pca_warped_%s.stl' % shell),
                         file_type='stl_ascii')
 
-    ## Python-MNE (.surf)
-    for shell in SHELLS:
-        try:
-            import nibabel as nib
-        except:
-            pass
-        else:
-            mne_names = {'scalp': 'outer_skin.surf',
-                         'skull': 'outer_skull.surf',
-                         'csf': 'inner_skull.surf',
-                         'cortex': 'inner_csf.surf'}
-            nib.freesurfer.io.write_geometry(pth(photogrammetry_pth, mne_names[shell]),
-                                             bnd_w[shell][0]/1000, bnd_w[shell][1])
-
     ## fieldtrip (MatLab struct .mat)
     sio.savemat(pth(photogrammetry_pth, 'pca_warped_bnd.mat'), {'bnd': bnd_w})
 
     ## .npy
     np.save(pth(photogrammetry_pth, 'pca_warped_bnd.npy'), bnd_w)
     np.save(pth(photogrammetry_pth, 'pca_warped_bnd_transform.npy'), transform)
+
 
 
     ## Cedalion (.nii), segmentation masks
@@ -225,15 +215,59 @@ if __name__ == '__main__':
         bnd_w[shell] = (apply_transform(ctf2ras, bnd_w[shell][0]/1000)*1000,
                         bnd_w[shell][1])
     bnds = [(bnd_w[shell][0], bnd_w[shell][1]) for shell in SHELLS] # mm
-    output_dir = pth(photogrammetry_pth, 'cedalion')
-    os.makedirs(output_dir, exist_ok=True)
-    back_transform = np.linalg.pinv(transform) @ ras2ctf # first back to ctf,
-                                                         # then in phtgrammetry
-                                                         # coordinate system
-    # back_transform = np.eye(4) #for RAS
-    tri2nii(bnds, output_dir=output_dir, transform=back_transform, 
+    cedalion_output_dir = pth(photogrammetry_pth, 'cedalion')
+    os.makedirs(cedalion_output_dir, exist_ok=True)
+    #back_transform = np.linalg.pinv(transform) @ ras2ctf # first back to ctf,
+    #                                                     # then in phtgrammetry
+    #                                                     # coordinate system
+    back_transform = np.eye(4) #for RAS
+    tri2nii(bnds, output_dir=cedalion_output_dir, transform=back_transform,
             t1_fn='src/template.nii', meshes='all')
     print('Masks created. Do some postprocessing:')
+    postprocessing(cedalion_output_dir, num_tissues=4)
+    # Clean up masks
+    for i in range(5):
+        for fn in ['mask_%d.nii' % i, 'mask_%d.nii.gz' % i]:
+            if os.path.exists(pth(cedalion_output_dir, fn)):
+                os.remove(pth(cedalion_output_dir, fn))
 
-    postprocessing(output_dir, num_tissues=4)
+    ditigized2ras = np.linalg.pinv(ras2ctf) @ transform # first to ctf,
+                                                        # then ctf2ras
+    import xarray as xr
+    from_crs, to_crs = "digitized", "ras"
+    ditigized2ras = xr.DataArray(ditigized2ras, dims=[to_crs, from_crs])
+    ditigized2ras.to_netcdf(pth(cedalion_output_dir, "t_ditigized2ras.nc"))
+
+
+    ## Python-MNE (.surf)
+    import nibabel as nib
+    mne_output_dir = pth(photogrammetry_pth, 'mne', 'pcawarp')
+    os.makedirs(pth(mne_output_dir, 'bem'), exist_ok=True)
+    os.makedirs(pth(mne_output_dir, 'mri'), exist_ok=True)
+    mne_names = {'scalp': 'outer_skin.surf',
+                 'skull': 'outer_skull.surf',
+                 'csf': 'inner_skull.surf',
+                 'cortex': 'inner_csf.surf'}
+    for shell in SHELLS:
+        nib.freesurfer.io.write_geometry(pth(mne_output_dir, 'bem',
+                                             mne_names[shell]),
+                                         bnd_w[shell][0]/1000, bnd_w[shell][1])
+    # + fake T1 MRI (for mne plotting)
+    data = nib.load(pth(cedalion_output_dir, 'mask_skin.nii')).get_fdata()
+    new_data = np.zeros(data.shape)
+    tissue_color = {'skin': 0.45, # ~0.4–0.6 (depends on fat content)
+                    'bone': 0.05, # ~0.0–0.1 (very dark, almost no signal)
+                    'csf': 0.1, #CSF ~0.0–0.1 (dark; long T1 -> low signal)
+                    'cortex': 0.55} #cortex (0.5–0.7 (wm brighter than gm)
+    for lab, tissue in enumerate(['skin', 'bone', 'csf', 'cortex']):
+        mask = nib.load(pth(cedalion_output_dir, f"mask_{tissue}.nii"))
+        new_data[mask.get_fdata() == 1] = tissue_color[tissue]
+    new_img = nib.nifti1.Nifti1Image(new_data, mask.affine, mask.header)
+    nib.save(new_img, pth(mne_output_dir, 'mri', 'T1.mgz'))
+    # + transform object for coregistration
+    import mne
+    from mne.transforms import Transform
+    trans = Transform('head', 'mri', ditigized2ras)
+    mne.write_trans(pth(mne_output_dir, 'ditigized2ras-trans.fif'), trans)
+
     print('Finished.')

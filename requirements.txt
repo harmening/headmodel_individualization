@@ -1,0 +1,10 @@
+numpy
+scikit-learn
+scikit-image
+numba
+trimesh
+vtk
+nibabel
+mne
+xarray
+nilearn
