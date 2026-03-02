@@ -1,8 +1,8 @@
 # Headmodel Individualization      
 **The presented PCAwarp algorithm estimates individual head anatomies based on a large database of heads when structural MRI/CT scans are unavailable using scalp data from photogrammetry or digitized electrode positions. The final surfaces meshes can be used to construct a BEM volume conduction head model for source reconstruction with e.g. [OpenMEEG](https://openmeeg.github.io/).<br>
-In our related scientific publication ["Data-driven head model individualization from digitized electrode positions or photogrammetry improves M/EEG source localization accuracy"]() (publication in progress) we demonstrate that our individualized PCAwarp head model outperformes any other head model in terms of source localization error:**
+In our related scientific publication ["Data-driven head model individualization from digitized electrode positions or photogrammetry improves M/EEG source localization accuracy"](https://direct.mit.edu/imag/article/doi/10.1162/IMAG.a.1073/134446) we demonstrate that our individualized PCAwarp head model outperformes any other head model in terms of source localization error (synthetic EEG data, SNR=10):**
 <img src="img/Simulation_study_raincloud.png"><br>
-**Measured in (a) residual variance (RV) in sensor space and (b) euklidian distance in source space.** <br>
+**Measured in residual variance (RV) in sensor space (left) and euklidian distance in source space (right).** <br>
 <br>
 <br>
 
@@ -125,26 +125,17 @@ reconstruction, regularizer type (if meshes are intersecting).
 
 
 
-<!--- 
 ## Citing
-If you find the headmodel individualization useful for your research, please consider citing our related [paper]().
+If you find the headmodel individualization useful for your research, please consider citing our related [paper](https://direct.mit.edu/imag/article/doi/10.1162/IMAG.a.1073/134446).
 ```
-@article{Harmening_2024,
+@article{Harmening_2026,
       author  = {Harmening, Nils and
                  von Lühmann, Alexander and
                  Blankertz, Benjamin}
       title   = {Data-driven head model individualization from digitized electrode positions or photogrammetry improves M/EEG source localization accuracy}
-      year    = {2024},
-      journal = {Nice Journal}
-      doi     = {},
-      volume  = {},
-      number  = {},
-      pages   = {},
+      year    = {2026},
+      journal = {Imaging Neuroscience}
+      doi = {10.1162/IMAG.a.1073},
+      volume = {4},
 }
 ```
---->
-
-
-
-
-
