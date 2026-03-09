@@ -146,7 +146,23 @@ def export_fieldtrip(bnd_w, output_dir):
     except ImportError:
         print('scipy not installed, skipping .mat export.')
     else:
-        sio.savemat(pth(output_dir, 'pca_warped_bnd.mat'), {'bnd': bnd_w})
+        # Define MATLAB struct dtype
+        dtype = np.dtype([
+            ('pos', 'O'),
+            ('tri', 'O'),
+            ('unit', 'O'),
+        ])
+
+        # Create 1x4 struct array
+        new_bnd = np.empty((1, len(SHELLS)), dtype=dtype)
+        for i, shell in enumerate(SHELLS):
+            pos, tri = bnd_w[shell]
+            new_bnd[0, i]['pos'] = pos
+            new_bnd[0, i]['tri'] = tri+1  # MATLAB uses 1-based indexing
+            new_bnd[0, i]['unit'] = 'mm'
+        
+        # Save to MAT file
+        sio.savemat(pth(output_dir, 'pca_warped_bnd.mat'), {'new_bnd': new_bnd})
 
 
 def export_npy(bnd_w, transform, output_dir):
@@ -257,7 +273,11 @@ def export_mne(bnd_w, transform, output_dir):
     nib.save(new_img, pth(mne_output_dir, 'mri', 'T1.mgz'))
 
     # Transform object for coregistration
-    trans = Transform('head', 'mri', transform)
+    ras2ctf = np.load('src/transform_acpc2ctf_icbm.npy', allow_pickle=True)
+    ras2ctf[:3,3] *= 1000 # m -> mm
+    ctf2ras = np.linalg.pinv(ras2ctf)
+    ditigized2ras = ctf2ras @ transform # first to ctf, then ctf2ras
+    trans = Transform('head', 'mri', ditigized2ras)
     mne.write_trans(pth(mne_output_dir, 'ditigized2ras-trans.fif'), trans)
 
 
