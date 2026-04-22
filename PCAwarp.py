@@ -15,11 +15,17 @@ from src.nii_postprocessing import postprocessing
 # Constants
 # =====================
 NUM_PCAS = 16  # out of 316
+HARTMUT = True  # whether to use Hartmut's PCA-based warping (True) or the original one (False)
+
 # Please do not change the following paths
 BASEDIR = os.path.dirname(os.path.realpath(__file__))
-PCAS = pth(BASEDIR, 'data', 'pcas', 'ALLpcas.npy')
-MEAN_HEAD = pth(BASEDIR, 'data', 'pcas', 'mean_head.npy')
-STD_DEV = pth(BASEDIR, 'data', 'pcas', 'std_dev.npy')
+if HARTMUT:
+    pca_dir = 'pcas_hartmut'
+else:
+    pca_dir = 'pcas'
+PCAS = pth(BASEDIR, 'data', pca_dir, 'ALLpcas.npy')
+MEAN_HEAD = pth(BASEDIR, 'data', pca_dir, 'mean_head.npy')
+STD_DEV = pth(BASEDIR, 'data', pca_dir, 'std_dev.npy')
 SHELLS = ['scalp', 'skull', 'csf', 'cortex']
 
 
@@ -256,7 +262,7 @@ def export_mne(bnd_w, transform, output_dir):
     for shell in SHELLS:
         nib.freesurfer.io.write_geometry(pth(mne_output_dir, 'bem',
                                              mne_names[shell]),
-                                         bnd_w[shell][0] / 1000,
+                                         bnd_w[shell][0],
                                          bnd_w[shell][1])
 
     # Create a fake T1.mgz file from the cedalion output (for MNE plotting)
