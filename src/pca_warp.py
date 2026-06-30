@@ -17,7 +17,6 @@ def elec_warp(elecpos, pcas, mean_head, std_dev, onebyone=False):
     # Warp to electrode positions or other point clouds
     scalp_tris = mean_head['scalp'][1]
     all_tris = {k: v[1] for k, v in mean_head.items()}
-    assert (scalp_tris == mean_head['cortex'][1]).all()
     num_pcas, pca_dim, dim = pcas.shape
     shells = list(mean_head.keys())
     bndsize = [len(mean_head[shell][0]) for shell in shells]

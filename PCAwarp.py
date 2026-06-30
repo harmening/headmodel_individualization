@@ -11,14 +11,34 @@ from src.tri2nii import tri2nii
 from src.nii_postprocessing import postprocessing
 
 
+BASEDIR = os.path.dirname(os.path.realpath(__file__))
+
+
 # =====================
 # Constants
 # =====================
 NUM_PCAS = 16  # out of 316
-HARTMUT = True  # whether to use Hartmut's PCA-based warping (True) or the original one (False)
+HARTMUT = True  # whether to use Hartmut's PCA-based warping (True) or the
+                # original one (False)
+
+# HArtMuT artefact warping. Only runs when HARTMUT is True (the HArtMuT PCAs).
+# The artefact sources are defined in the template the chosen HArtMuT model
+# lives in, so we warp from that template into the individual head. We start
+# from the base HArtMuT NYhead coming from the HArtMuT repo (sibling checkout
+# by default), see https://github.com/harmening/HArtMuT. Override the paths if
+# yours differ.
+HARTMUT_REPO = pth(BASEDIR, '..', 'HArtMuT')
+HARTMUT_MODEL = pth(HARTMUT_REPO, 'HArtMuTmodels', 'HArtMuT_NYhead_small.mat')
+HARTMUT_TEMPLATE = {'scalp': pth(HARTMUT_REPO, 'individualwarp', 'NYhead',
+                                 'scalp.stl'),
+                    'skull': pth(HARTMUT_REPO, 'individualwarp', 'NYhead',
+                                 'skull.stl')}
+HARTMUT_MEANPNT = np.array([0.0, -10.0, 0.0])  # fixed ray origin, model frame, mm
+ACPC2CTF = pth(BASEDIR, 'src', 'transform_acpc2ctf_icbm.npy')
+
+
 
 # Please do not change the following paths
-BASEDIR = os.path.dirname(os.path.realpath(__file__))
 if HARTMUT:
     pca_dir = 'pcas_hartmut'
 else:
@@ -146,29 +166,97 @@ def export_openmeeg(bnd_w, output_dir):
             pass
 
 
-def export_fieldtrip(bnd_w, output_dir):
+def export_fieldtrip(bnd_w, output_dir, coordsys='digitized', eye_pos=None,
+                     fiducials=None, hartmut=None, fname='pcawarp_bnd.mat'):
+    """Write the surfaces as bnd.mat to be used by fieldtrip's dipolefitting.
+
+    Standard FieldTrip constructs only: a 4-element mesh array `bnd` (scalp,
+    skull, csf, cortex), a parallel `tissue` cell array, an optional `eye`
+    struct with one eye's candidate positions for artefact-aware dipole fitting
+    a la HArtMuT, and an optional `fiducials` struct (Nz, LPA, RPA, in the same
+    digitized frame) so the head can be transformed to a known coordinate system.
+    The `coordsys` field is set to 'digitized' by default,
+
+    When HARTMUT is True, `hartmut` carries the warped artefact model (positions,
+    source model dict), which is written alongside as the individual HArtMuT
+    artefact model.
+    """
     try:
         import scipy.io as sio
     except ImportError:
         print('scipy not installed, skipping .mat export.')
-    else:
-        # Define MATLAB struct dtype
-        dtype = np.dtype([
-            ('pos', 'O'),
-            ('tri', 'O'),
-            ('unit', 'O'),
-        ])
+        return
 
-        # Create 1x4 struct array
-        new_bnd = np.empty((1, len(SHELLS)), dtype=dtype)
-        for i, shell in enumerate(SHELLS):
-            pos, tri = bnd_w[shell]
-            new_bnd[0, i]['pos'] = pos
-            new_bnd[0, i]['tri'] = tri+1  # MATLAB uses 1-based indexing
-            new_bnd[0, i]['unit'] = 'mm'
-        
-        # Save to MAT file
-        sio.savemat(pth(output_dir, 'pca_warped_bnd.mat'), {'new_bnd': new_bnd})
+    dtype = np.dtype([('pos', 'O'), ('tri', 'O'), ('unit', 'O'),
+                      ('coordsys', 'O')])
+    bnd = np.empty((1, len(SHELLS)), dtype=dtype)
+    for i, shell in enumerate(SHELLS):
+        pos, tri = bnd_w[shell]
+        bnd[0, i]['pos'] = np.asarray(pos, dtype=float)
+        bnd[0, i]['tri'] = np.asarray(tri, dtype=float) + 1  # MATLAB uses 1-based indexing
+        bnd[0, i]['unit'] = 'mm'
+        bnd[0, i]['coordsys'] = coordsys
+
+    out = {'bnd': bnd, 'tissue': np.array(SHELLS, dtype=object)}
+    if eye_pos is not None and len(eye_pos):
+        out['eye'] = {'pos': np.asarray(eye_pos, dtype=float)}
+    if fiducials is not None and len(fiducials):
+        out['fiducials'] = {'pos': np.asarray(fiducials, dtype=float),
+                            'label': np.array(['Nz', 'LPA', 'RPA'], dtype=object)}
+    sio.savemat(pth(output_dir, fname), out)
+
+    if HARTMUT and hartmut is not None:
+        new_pos, model = hartmut
+        export_hartmut(new_pos, model, output_dir)
+
+
+def export_hartmut(new_pos, model, output_dir, fname='pcawarp_hartmut.mat'):
+    """Save the warped HArtMuT artefact model, mirroring the Julia individualwarp
+    output: same orientation, labels and unit, only the positions are warped."""
+    import scipy.io as sio
+    artefactmodel = {'pos': np.asarray(new_pos, dtype=float),
+                     'orientation': model['orientation'],
+                     'labels': model['labels'],
+                     'unit': model['unit']}
+    sio.savemat(pth(output_dir, fname),
+                {'HArtMuT': {'artefactmodel': artefactmodel}})
+
+
+def warp_artefacts_ctf(bnd_w_ctf):
+    """Warp the HArtMuT artefact sources into the individual head, in CTF.
+
+    bnd_w_ctf holds the warped individual surfaces in CTF (before the
+    back-transform to the input frame). Returns the warped artefact positions,
+    the one-eye candidate positions, and the source model dict, all in CTF.
+    """
+    import scipy.io as sio
+    import trimesh
+    from src.hartmut_warp import warp_hartmut
+
+    acpc2ctf = np.load(ACPC2CTF, allow_pickle=True).astype(float)
+    acpc2ctf[:3, 3] *= 1000.0  # m -> mm
+
+    # source template (HArtMuT model frame) into CTF
+    src_head = {}
+    for shell in ('scalp', 'skull'):
+        mesh = trimesh.load(HARTMUT_TEMPLATE[shell])
+        verts = np.asarray(mesh.vertices, dtype=float)
+        src_head[shell] = (apply_transform(acpc2ctf, verts),
+                           np.asarray(mesh.faces))
+    tgt_head = {shell: bnd_w_ctf[shell] for shell in ('scalp', 'skull')}
+
+    H = sio.loadmat(HARTMUT_MODEL, struct_as_record=False,
+                    squeeze_me=True)['HArtMuT']
+    am = H.artefactmodel
+    model = {'pos': np.asarray(am.pos, dtype=float),
+             'orientation': am.orientation, 'labels': am.labels,
+             'unit': am.unit}
+    pos_ctf = apply_transform(acpc2ctf, model['pos'])
+    mean_pnt = apply_transform(acpc2ctf, HARTMUT_MEANPNT[None, :])[0]
+
+    new_pos_ctf, eye_ctf = warp_hartmut(pos_ctf, model['labels'],
+                                        src_head, tgt_head, mean_pnt)
+    return new_pos_ctf, eye_ctf, model
 
 
 def export_npy(bnd_w, transform, output_dir):
@@ -179,7 +267,7 @@ def export_npy(bnd_w, transform, output_dir):
 def export_cedalion(bnd_w, transform, fiducials, output_dir):
     print('Start cedalion export...')
     # Transform again into ctf and then into RAS (this is necessary for tri2nii)
-    ras2ctf = np.load('src/transform_acpc2ctf_icbm.npy', allow_pickle=True)
+    ras2ctf = np.load(ACPC2CTF, allow_pickle=True).astype(float)
     ras2ctf[:3,3] *= 1000 # m -> mm
     ctf2ras = np.linalg.pinv(ras2ctf)
     for shell in SHELLS:
@@ -279,7 +367,7 @@ def export_mne(bnd_w, transform, output_dir):
     nib.save(new_img, pth(mne_output_dir, 'mri', 'T1.mgz'))
 
     # Transform object for coregistration
-    ras2ctf = np.load('src/transform_acpc2ctf_icbm.npy', allow_pickle=True)
+    ras2ctf = np.load(ACPC2CTF, allow_pickle=True).astype(float)
     ras2ctf[:3,3] *= 1000 # m -> mm
     ctf2ras = np.linalg.pinv(ras2ctf)
     ditigized2ras = ctf2ras @ transform # first to ctf, then ctf2ras
@@ -325,19 +413,52 @@ def main():
         scalp = scalp[np.random.choice(len(scalp), 100, replace=False)]
 
     print('Performing PCA warping...')
-    bnd_w = pca_surfacemesh_warping(fiducials, scalp)
+    bnd_w_ctf = pca_surfacemesh_warping(fiducials, scalp)
+
+    output_dir = os.path.dirname(args.scalp)
+    inv = np.linalg.pinv(transform)  # CTF -> input frame
+
+    # Warp the HArtMuT artefact sources (muscle, eyes) into the individual head.
+    # Only for the HArtMuT PCAs, the artefact model lives in their template.
+    eye_pos = None
+    hartmut = None
+    eye_ctf_export = None
+    hartmut_ctf = None
+    if HARTMUT:
+        print('Warping HArtMuT artefact sources into the individual head...')
+        new_pos_ctf, eye_ctf, model = warp_artefacts_ctf(bnd_w_ctf)
+        new_pos = apply_transform(inv, new_pos_ctf)
+        eye_pos = apply_transform(inv, eye_ctf) if len(eye_ctf) else None
+        hartmut = (new_pos, model)
+        eye_ctf_export = eye_ctf if len(eye_ctf) else None
+        hartmut_ctf = (new_pos_ctf, model)
 
     print('Back-transform warped boundaries...')
+    bnd_w = {}
     for shell in SHELLS:
-        bnd_w[shell] = (apply_transform(np.linalg.pinv(transform),
-                                        bnd_w[shell][0]),
-                        bnd_w[shell][1])
+        bnd_w[shell] = (apply_transform(inv, bnd_w_ctf[shell][0]),
+                        bnd_w_ctf[shell][1])
 
     # Exports
-    output_dir = os.path.dirname(args.scalp)
     print(f"Export (.tri, .stl, .mat, .npy) to {output_dir}/...")
     export_openmeeg(bnd_w, output_dir)
-    export_fieldtrip(bnd_w, output_dir)
+    # export the FieldTrip head in three frames: the input (digitized) frame, CTF, and MNI. CTF and
+    # MNI are recognized coordinate systems, so HArtMuT eye fitting works on those two files without
+    # any further coordinate transform, and a standard cap aligns with the MNI head
+    fiducials_ctf = apply_transform(transform, fiducials)
+    ras2ctf = np.load(ACPC2CTF, allow_pickle=True).astype(float)
+    ras2ctf[:3, 3] *= 1000  # m -> mm
+    ctf2ras = np.linalg.pinv(ras2ctf)
+    bnd_w_mni = {shell: (apply_transform(ctf2ras, bnd_w_ctf[shell][0]), bnd_w_ctf[shell][1])
+                 for shell in SHELLS}
+    eye_mni = apply_transform(ctf2ras, eye_ctf_export) if eye_ctf_export is not None else None
+    fiducials_mni = apply_transform(ctf2ras, fiducials_ctf)
+    export_fieldtrip(bnd_w, output_dir, coordsys='digitized', eye_pos=eye_pos,
+                     fiducials=fiducials, fname='pcawarp_bnd_digitized.mat')
+    export_fieldtrip(bnd_w_ctf, output_dir, coordsys='ctf', eye_pos=eye_ctf_export,
+                     fiducials=fiducials_ctf, hartmut=hartmut_ctf, fname='pcawarp_bnd_ctf.mat')
+    export_fieldtrip(bnd_w_mni, output_dir, coordsys='mni', eye_pos=eye_mni,
+                     fiducials=fiducials_mni, fname='pcawarp_bnd_mni.mat')
     export_npy(bnd_w, transform, output_dir)
     export_cedalion(bnd_w, transform, fiducials, output_dir)
     export_mne(bnd_w, transform, output_dir)
