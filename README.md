@@ -125,6 +125,24 @@ reconstruction, regularizer type (if meshes are intersecting).
 
 
 
+## PCA databases
+
+Currently, we offer 2 shape databases with the repository. Both use the same four shells, the same 1922-vertex triangulation and the same CTF frame, so they are interchangeable and directly comparable.
+
+| `PCA_DIR` | cohort | components | scalp | details |
+|---|---|---|---|---|
+| `oasis` | US/Western adults, 316 | 315 | standard | [README](data/pcas/oasis/README.md) |
+| `oasis_hartmut` | US/Western adults, 316 | 315 | neck-extended | [README](data/pcas/oasis/README.md) |
+| `bcas` | Chinese adults, 178 | 177 | standard | [README](data/pcas/bcas/README.md) |
+| `bcas_hartmut` | Chinese adults, 178 | 177 | neck-extended | [README](data/pcas/bcas/README.md) |
+
+The neck-extended variants differ only in the scalp (2222 vertices instead of 1922), which HArtMuT needs; skull, CSF and cortex are the same. Each database folder has a short README with the cohort and the citation to use.
+
+To pick one, set `PCA_DIR` near the top of `PCAwarp.py`, e.g. `PCA_DIR = 'bcas'`. Leaving it as `None` keeps the previous behavior of choosing between `oasis` and `oasis_hartmut` based on the `HARTMUT` flag.
+
+`ALLpcas.npy` holds one component per usable direction, i.e. one fewer than the number of subjects, since PCA on N centered heads determines at most N-1 directions. 
+
+
 ## Citing
 If you find the headmodel individualization useful for your research, please consider citing our related [paper](https://direct.mit.edu/imag/article/doi/10.1162/IMAG.a.1073/134446).
 ```
