@@ -141,6 +141,29 @@ The neck-extended variants differ only in the scalp (2222 vertices instead of 19
 To pick one, set `PCA_DIR` near the top of `PCAwarp.py`, e.g. `PCA_DIR = 'bcas'`. Leaving it as `None` keeps the previous behavior of choosing between `oasis` and `oasis_hartmut` based on the `HARTMUT` flag.
 
 `ALLpcas.npy` holds one component per usable direction, i.e. one fewer than the number of subjects, since PCA on N centered heads determines at most N-1 directions. 
+`pca_construction/build_pca_basis.py` drops the leftover one by default.
+
+
+## Building your own PCA database
+
+If you have a set of MRIs of a population that isn't represented here, you can build your own basis and use it with `PCAwarp.py`. See [`pca_construction/README.md`](pca_construction/README.md) for the full recipe.
+
+The short version: segment every subject with [MRIsegmentation](https://github.com/harmening/MRIsegmentation/) using the preprocessing, which aligns to RAS with ATRA and gives all subjects the same triangulation, then
+
+```
+python pca_construction/qc_meshes.py       --input-dir /path/to/subjects
+python pca_construction/build_pca_basis.py --input-dir /path/to/subjects \
+                                           --output-dir data/pcas/mine
+```
+
+Two things to know before you start. The MRIs must be **whole-head, not defaced and not skull-stripped**, since the pipeline segments scalp and skull and warps fiducials onto the face. And if you plan to publish the resulting basis, it is worth reading the terms of the source data first, since they vary and some address derived data explicitly.
+
+
+## Contributing a database
+
+The databases here cover a Western and a Chinese adult sample, which leaves a lot of the world out. If you have MRIs of a population that isn't represented, or of children, I'd like to help you turn them into a basis, and I'd be glad to host or link the result here so others can use it.
+
+That offer is open in both directions. If you need a basis for a specific population or age range, and you don't have the data or the compute, reach me at nils.harmening@tu-berlin.de or open an issue, and we can think about a solution together.
 
 
 ## Citing
