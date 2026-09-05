@@ -17,16 +17,14 @@ BASEDIR = os.path.dirname(os.path.realpath(__file__))
 # =====================
 # Constants
 # =====================
-NUM_PCAS = 16  # out of 316
-HARTMUT = True  # whether to use Hartmut's PCA-based warping (True) or the
-                # original one (False)
+NUM_PCAS = 16  # out of 315 (oasis, oasis_hartmut)
+HARTMUT = False  # whether to use Hartmut's PCA-based warping (True) or the
+                 # original one (False)
 
 # HArtMuT artefact warping. Only runs when HARTMUT is True (the HArtMuT PCAs).
-# The artefact sources are defined in the template the chosen HArtMuT model
-# lives in, so we warp from that template into the individual head. We start
-# from the base HArtMuT NYhead coming from the HArtMuT repo (sibling checkout
-# by default), see https://github.com/harmening/HArtMuT. Override the paths if
-# yours differ.
+# The artefact sources are defined in the chosen HArtMuT template, so we warp
+# from that template into the individual head. Default is the HArtMuT NYhead
+# from the official HArtMuT repo, see https://github.com/harmening/HArtMuT.
 HARTMUT_REPO = pth(BASEDIR, '..', 'HArtMuT')
 HARTMUT_MODEL = pth(HARTMUT_REPO, 'HArtMuTmodels', 'HArtMuT_NYhead_small.mat')
 HARTMUT_TEMPLATE = {'scalp': pth(HARTMUT_REPO, 'individualwarp', 'NYhead',
@@ -38,14 +36,21 @@ ACPC2CTF = pth(BASEDIR, 'src', 'transform_acpc2ctf_icbm.npy')
 
 
 
+# Which shipped PCA database to use. Leave as None to pick the normal OASIS PCA
+# database used in the publication. Set it to a folder name under data/pcas/ to
+# override. 
+PCA_DIR = None
+
 # Please do not change the following paths
-if HARTMUT:
-    pca_dir = 'pcas_hartmut'
+if PCA_DIR is not None:
+    pca_dir = PCA_DIR
+elif HARTMUT:
+    pca_dir = 'oasis_hartmut'
 else:
-    pca_dir = 'pcas'
-PCAS = pth(BASEDIR, 'data', pca_dir, 'ALLpcas.npy')
-MEAN_HEAD = pth(BASEDIR, 'data', pca_dir, 'mean_head.npy')
-STD_DEV = pth(BASEDIR, 'data', pca_dir, 'std_dev.npy')
+    pca_dir = 'oasis'
+PCAS = pth(BASEDIR, 'data', 'pcas', pca_dir, 'ALLpcas.npy')
+MEAN_HEAD = pth(BASEDIR, 'data', 'pcas', pca_dir, 'mean_head.npy')
+STD_DEV = pth(BASEDIR, 'data', 'pcas', pca_dir, 'std_dev.npy')
 SHELLS = ['scalp', 'skull', 'csf', 'cortex']
 
 
